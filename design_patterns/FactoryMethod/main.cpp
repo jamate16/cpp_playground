@@ -45,24 +45,6 @@ public:
 	}
 };
 
-class EnemyShipFactory {
-public:
-	EnemyShip* makeEnemyShip(char typeShip) {
-		EnemyShip* enemyShip; // I have a question here, does this force object slicing?
-		switch (typeShip) {
-			case 'U':
-				enemyShip = new UFOEnemyShip();
-				break;
-			case 'R':
-				enemyShip = new RocketEnemyShip();
-				break;
-			default:
-				enemyShip = new UFOEnemyShip();
-		}
-		return enemyShip;
-	}
-};
-
 void doEnemyStuff(EnemyShip &ship) {
 	ship.displayShip();
 	ship.followHero();
@@ -76,8 +58,17 @@ int main() {
 	std::cin >> enemyUserOption;
 
 	// What if later on we decide to add lots of enemies, should we be changing the main function of out program? Hell nah!. Let's use a Factory Method design pattern.
-	EnemyShip* enemyShip; 
-
+	EnemyShip* enemyShip;
+	switch (enemyUserOption) {
+		case 'U':
+			enemyShip = new UFOEnemyShip();
+			break;
+		case 'R':
+			enemyShip = new RocketEnemyShip();
+			break;
+		default:
+			enemyShip = new UFOEnemyShip();
+	}
 
 	doEnemyStuff(*enemyShip);
 
