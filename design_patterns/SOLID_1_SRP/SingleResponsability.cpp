@@ -27,20 +27,24 @@ void Journal::add(const std::string& entry) {
 	entries.push_back(std::to_string(count++) + ": " + entry);
 }
 
-// Why have a save method inside of journal, which journal in real life has the functionality of saving itself on the bookshelf or somewhere. None. We are not following the SRP, let's implement it
-void Journal::save(const std::string& filename) {
-	std::ofstream ofs{ filename };
-	for (auto& entry : entries)
-		ofs << entry << std::endl;
-	ofs.close();
-}
+// The responsability of saving entries is the journal's and the responsability of saving the Journal is some other object's
+
+class JournalSaver {
+public:
+	static void save(Journal& j, std::string filename) {
+		std::ofstream ofs{ filename };
+		for (auto& entry : j.entries)
+			ofs << entry << std::endl;
+		ofs.close();
+	}
+};
 
 
 int main() {
 	Journal myJ{ "This is my Journal" };
 
 	myJ.add("I got the GoW Ragnarok ps5 controller today");
-	myJ.save("Todays log.txt");
+	JournalSaver::save(myJ, "Todays log.txt");
 
 	return 0;
 }
