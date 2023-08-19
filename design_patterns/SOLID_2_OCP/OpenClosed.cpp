@@ -34,45 +34,71 @@ public:
 Product::Product(std::string name, Color color, Size size)
 	: name{name}, color{color}, size{size} {}
 
-// We follow the single responsability principle, keeping in mind that product has no responsability of filtering
-class ProductFilter {
+// We follow SRP further, and we divide filtering into a filter and a specification
+// Specification:
+template <typename T> class Specification {
 public:
-	typedef std::vector<Product*> Items; // Create an alias to std::vector<Product*> to avoid writing that 238942394 times
-
-	Items byColor(Items, Color color);
-	Items bySize(Items, Size size);
+	virtual bool isSatisfied(T* item) = 0; // We enforce the use overwrites this method in every concrete implementation
 };
 
-ProductFilter::Items ProductFilter::byColor(Items items, Color color) {
-	Items result;
-	for (auto& item : items)
-		if (item->color == color)
-			result.push_back(item);
+// Filter:
+template <typename T> class Filter {
+public:
+	virtual std::vector<T*> filter(std::vector<T*> items, Specification<T>& spec) = 0; // Again, we enforce
+};
 
-	return result;
-}
+// Now we create a concrete filter using the abstract classes implemented
+class BetterProductFilter : public Filter<Product> {
+public:
+	std::vector<Product*> filter(std::vector<Product*> items, Specification<Product>& spec) override {
+		std::vector<Product*> filteredItems;
 
-// This is a copy of the code above. We are modifying the base class and in case we added another property, we would have to extend this filter class in the same way as with this bySize()
-// it would become in the same code duplicated multiple times, so here we need the OC principle. Open for extension, closed for modification.
-ProductFilter::Items ProductFilter::bySize(Items items, Size size) {
-	Items result;
-	for (auto& item : items)
-		if (item->size == size)
-			result.push_back(item);
+		for (auto& item : items) {
+			if (spec.isSatisfied(item))
+				filteredItems.push_back(item);
+		}
+		return filteredItems;
+	}
+};
 
-	return result;
-}
+class ColorSpecification : public Specification<Product> {
+public:
+	Color color; // Maybe this would be better using dependency injection? R/. It sort of already has the dependency injected, since we just declare the object here but initialize it based on what's passed in the constructor
+
+	explicit ColorSpecification(Color color) /* Explicit, otherwise when using the filter, we could pass a color instead of specification, and the compiler would try to implicitly convert one type to the other, generating all sorts of problems*/
+		: color{color} {}
+
+	bool isSatisfied(Product* item) override {
+		return item->color == color;
+	}
+};
+
+// We extend specification for sizes
+class SizeSpecification : public Specification<Product> {
+public:
+	Size size; // Maybe this would be better using dependency injection?
+
+	explicit SizeSpecification(Size size) /* Explicit, otherwise when using the filter, we could pass a size instead of specification, and the compiler would try to implicitly convert one type to the other, generating all sorts of problems*/
+		: size{ size } {}
+
+	bool isSatisfied(Product* item) override {
+		return item->size == size;
+	}
+};
 
 int main() {
 	Product p1Ptr { "Controller 1", Color::Red, Size::Small };
 	Product p2Ptr { "Controller 2", Color::Red, Size::Medium };
 	Product p3Ptr { "Controller 3", Color::Blue, Size::Small };
 
-	ProductFilter::Items myPVector{&p1Ptr, &p2Ptr, &p3Ptr};
+	std::vector<Product*> myPVector{&p1Ptr, &p2Ptr, &p3Ptr};
 	
-	ProductFilter myFilter;
-	ProductFilter::Items redItems = myFilter.byColor(myPVector, Color::Red);
-	ProductFilter::Items smallItems = myFilter.bySize(myPVector, Size::Small);
+	BetterProductFilter bF;
+	ColorSpecification specRedColor{ Color::Red };
+	SizeSpecification specSmallSize{ Size::Small };
+
+	std::vector<Product*> redItems = bF.filter(myPVector, specRedColor);
+	std::vector<Product*> smallItems = bF.filter(myPVector, specSmallSize);
 
 	for (auto& item : redItems) {
 		std::cout << "Item: " << item->name << " color: " << colors[item->color] << " size: " << sizes[item->size] << std::endl;
