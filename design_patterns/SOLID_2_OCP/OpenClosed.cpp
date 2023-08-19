@@ -3,6 +3,10 @@ This code is my implementation of Dmitri Nusteruk' example in the Design Pattern
 
 In the first commit I will implement the code that shows the need for the principle, and in the second I
 will implement the code with the principle
+
+Final thoughts: This code is scalable by allowing the user to add new specifications and filters without altering the existing code.
+To create a new specification one has to derive Specification and override the isSatisfied method and to create a new filter,
+derive from Filter and override the filter method.
 */
 #include <string>
 #include <vector>
@@ -34,11 +38,35 @@ public:
 Product::Product(std::string name, Color color, Size size)
 	: name{name}, color{color}, size{size} {}
 
+template <typename T> class AndSpecification; // Class prototype so compiler is happy when I mention AndSpecification in Specification class
+
 // We follow SRP further, and we divide filtering into a filter and a specification
 // Specification:
 template <typename T> class Specification {
 public:
 	virtual bool isSatisfied(T* item) = 0; // We enforce the use overwrites this method in every concrete implementation
+
+	AndSpecification<T> operator&&(Specification& other) {
+		return AndSpecification<T>(*this /*Dereference bc AndSpecification expects references to specs, not pointers*/, other);
+	}
+
+	AndSpecification<T> operator&&(Specification&& other) {
+		return AndSpecification<T>(*this /*Dereference bc AndSpecification expects references to specs, not pointers*/, other);
+	}
+};
+
+// Now, let's say we want to add multiple filters, for this we shall create a composite specification and override the operator && for specification class template
+template <typename T> class AndSpecification : public Specification<T> {
+public:
+	Specification<T>& specA;
+	Specification<T>& specB;
+
+	AndSpecification(Specification<T>& specA, Specification<T>& specB)
+		: specA{specA}, specB{specB} {}
+
+	bool isSatisfied(T* item) {
+		return specA.isSatisfied(item) && specB.isSatisfied(item);
+	}
 };
 
 // Filter:
@@ -96,15 +124,22 @@ int main() {
 	BetterProductFilter bF;
 	ColorSpecification specRedColor{ Color::Red };
 	SizeSpecification specSmallSize{ Size::Small };
+	auto specRedAndSmall = specRedColor && specSmallSize; // Auto cuz I have no idea what it returns haha, ill check with the debugger. R/. AndSpecification<Product>, actually I knew it was AndSpecification, but it showed an error, all I was missing was <Product>
 
 	std::vector<Product*> redItems = bF.filter(myPVector, specRedColor);
 	std::vector<Product*> smallItems = bF.filter(myPVector, specSmallSize);
+	std::vector<Product*> redAndSmallItems = bF.filter(myPVector, specRedAndSmall);
+	
 
 	for (auto& item : redItems) {
 		std::cout << "Item: " << item->name << " color: " << colors[item->color] << " size: " << sizes[item->size] << std::endl;
 	}
 
 	for (auto& item : smallItems) {
+		std::cout << "Item: " << item->name << " color: " << colors[item->color] << " size: " << sizes[item->size] << std::endl;
+	}
+
+	for (auto& item : redAndSmallItems) {
 		std::cout << "Item: " << item->name << " color: " << colors[item->color] << " size: " << sizes[item->size] << std::endl;
 	}
 
