@@ -8,42 +8,72 @@ I'll be implementing a Builder design pattern (to practice) that will create con
 
 class ControllerScheme {
 public:
+	typedef std::string str;
 
-	std::string triggers;
-	std::string bumpers;
+	str triggers;
+	str bumpers;
 
-	std::string homeButton;
-	std::string dPad;
-	std::string menuButtons;
-	std::string faceButtons;
+	str homeButton;
+	str dPad;
+	str menuButtons;
+	str faceButtons;
 
-	std::string frontShell;
-	std::string backShell;
+	str frontShell;
+	str backShell;
 
-	std::string joySticks;
+	str joySticks;
 
-	ControllerScheme(std::string, std::string, std::string, std::string, std::string, std::string, std::string, std::string, std::string);
+	ControllerScheme(str, str, str, str, str, str, str, str, str);
+
+	virtual ControllerScheme* clone() {
+		return new ControllerScheme(*this);
+	}
 };
 
-ControllerScheme::ControllerScheme(std::string triggersColor, std::string bumpersColor, std::string homeButtonColor, std::string dPadColor, std::string menuButtonsColor, std::string faceButtonsColor, std::string frontShellColor, std::string backShellColor, std::string joySticksColor)
+ControllerScheme::ControllerScheme(str triggersColor, str bumpersColor, str homeButtonColor, str dPadColor, str menuButtonsColor, str faceButtonsColor, str frontShellColor, str backShellColor, str joySticksColor)
 	: triggers(triggersColor), bumpers(bumpersColor), homeButton(homeButtonColor), dPad(dPadColor), menuButtons(menuButtonsColor), faceButtons(faceButtonsColor), frontShell(frontShellColor), backShell(backShellColor), joySticks(joySticksColor) {}
 
 class DualsenseControllerScheme : public ControllerScheme {
-public:
-	std::string trim;
-	std::string touchPad;
 
-	DualsenseControllerScheme()
-		: ControllerScheme{ "black", "black", "black", "white", "white", "white", "white", "white", "black" }, trim{ "black" }, touchPad{ "white" } {}
+public:
+	str trim;
+	str touchPad;
+
+	static DualsenseControllerScheme defaultScheme;
+
+	DualsenseControllerScheme(const ControllerScheme& baseScheme, str trimColor, str touchPadColor)
+		: ControllerScheme(baseScheme), trim{ trimColor }, touchPad{ touchPadColor } {}
+
+	DualsenseControllerScheme* clone() override { // Here we make use of Covarian Return types
+		return new DualsenseControllerScheme(*this);
+	}
 };
 
 class XboxControllerScheme : public ControllerScheme {
 public:
-	std::string batteryCover;
+	str batteryCover;
 
-	XboxControllerScheme()
-		: ControllerScheme{ "black", "black", "black", "black", "black", "black", "black", "black", "black" }, batteryCover{ "black" } {}
+	static XboxControllerScheme defaultScheme;
+
+	XboxControllerScheme(const ControllerScheme& baseScheme, str batteryCoverColor)
+		: ControllerScheme(baseScheme), batteryCover{ batteryCoverColor } {}
+
+	XboxControllerScheme* clone() override { // Here we make use of Covariant Return types
+		return new XboxControllerScheme(*this); // Default copy constructor since there are no raw pointers, only std::strings. TODO: Implement copy constructor.
+	}
 };
+
+// Default schemes or "Prototypes" not hardcoded in the Class' constructor. Prototype pattern implemented.
+DualsenseControllerScheme DualsenseControllerScheme::defaultScheme(
+	ControllerScheme("black", "black", "black", "white", "white", "white", "white", "white", "black"),
+	"black",
+	"white"
+);
+
+XboxControllerScheme XboxControllerScheme::defaultScheme(
+	ControllerScheme("black", "black", "black", "black", "black", "black", "black", "black", "black"),
+	"black"
+);
 
 template<typename T>
 class ControllerSchemeBuilder {
@@ -62,6 +92,11 @@ public:
 	virtual Builder* setFrontShell(std::string);
 	virtual Builder* setBackShell(std::string);
 	virtual Builder* setJoySticks(std::string);
+
+	static T* getDefaultScheme() {
+		return T::defaultScheme.clone();
+	}
+
 	virtual T* build();
 };
 
@@ -95,7 +130,7 @@ T* ControllerSchemeBuilder<T>::build() { return controllerScheme; }
 class DualsenseControllerSchemeBuilder : public ControllerSchemeBuilder<DualsenseControllerScheme> {
 public:
 	DualsenseControllerSchemeBuilder() {
-		controllerScheme = new DualsenseControllerScheme();
+		controllerScheme = getDefaultScheme();
 	}
 
 	Builder* setTrim(std::string color) { controllerScheme->trim = color; return this; }
@@ -106,7 +141,7 @@ public:
 class XboxControllerSchemeBuilder : public ControllerSchemeBuilder<XboxControllerScheme> {
 public:
 	XboxControllerSchemeBuilder() {
-		controllerScheme = new XboxControllerScheme();
+		controllerScheme = getDefaultScheme();
 	}
 
 	Builder* setBatteryCover(std::string color) { controllerScheme->batteryCover = color; return this; }
@@ -114,9 +149,11 @@ public:
 
 int main() {
 	DualsenseControllerSchemeBuilder* myPSControlBuilder = new DualsenseControllerSchemeBuilder();
-	auto controller = myPSControlBuilder->setTrim("purple")->build();
+	auto controller1 = myPSControlBuilder->setTrim("purple")->build();
+	std::cout << controller1->trim << std::endl;
 
-	std::cout << controller->trim << std::endl;
+	auto controller2 = myPSControlBuilder->setTrim("green")->build();
+	std::cout << controller2->trim << std::endl;
 
 	delete myPSControlBuilder;
 	return 0;
