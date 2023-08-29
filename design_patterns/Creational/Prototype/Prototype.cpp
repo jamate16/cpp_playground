@@ -125,7 +125,14 @@ template<typename T>
 ControllerSchemeBuilder<T>* ControllerSchemeBuilder<T>::setJoySticks(std::string color) { controllerScheme->joySticks = color; return this; }
 
 template<typename T>
-T* ControllerSchemeBuilder<T>::build() { return controllerScheme; }
+T* ControllerSchemeBuilder<T>::build() {
+	// Copy built scheme and reset builder scheme to default to prepare for next scheme creation
+	T* builtControllerScheme = controllerScheme->clone();
+	delete controllerScheme;
+	controllerScheme = getDefaultScheme();
+
+	return builtControllerScheme;
+}
 
 class DualsenseControllerSchemeBuilder : public ControllerSchemeBuilder<DualsenseControllerScheme> {
 public:
