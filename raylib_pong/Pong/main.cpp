@@ -7,6 +7,10 @@ namespace rl {
 	#include "raylib.h"
 }
 
+struct Vector2 {
+	float x, y;
+};
+
 struct PlayableRectangle {
 	const rl::Vector2 origin;
 	const rl::Vector2 dimentions;
@@ -16,73 +20,73 @@ struct PlayableRectangle {
 	}
 };
 
+struct GameObject {
+	Vector2 position;
+	Vector2 speed;
 
-struct Paddle {
+	GameObject(Vector2 position, Vector2 speed)
+		: position{ position }, speed{ speed } {}
+
+	virtual void keepInsidePlayableArea(const PlayableRectangle& rect) = 0;
+	virtual void positionInPlayableArea(const PlayableRectangle& rect) = 0;
+	virtual void updatePosition(float timeDelta) = 0;
+};
+
+struct Paddle : GameObject{
 	enum PaddleType {
 		LEFT = 0,
 		RIGHT
-	};
+	} type;
 
 	float width, height;
-	PaddleType type;
-
-	// Position of top left corner
-	rl::Vector2 position;
-	float speedY;
 
 	Paddle(int width, int height, PaddleType type, float speed = 1)
-		: width{ static_cast<float>(width) }, height{ static_cast<float>(height) }, position{ 0.0, 0.0 }, type{ type }, speedY{ speed } {
+		: width{ static_cast<float>(width) }, height{ static_cast<float>(height) }, type{ type }, GameObject { {0.0, 0.0}, { 0.0, speed }} {}
 
-	}
 	// Another way we can do this and the ball too, is having a "positioner" class that will take care of the positioning of the objects
-	void positionSidePlayableArea(const PlayableRectangle& rect) {
+	void positionInPlayableArea(const PlayableRectangle& rect) override {
 		switch (type) {
 		case PaddleType::RIGHT:
-			position.x = rect.origin.x + rect.dimentions.x - 0.0625 * rect.dimentions.x - width;
+			position.x = rect.origin.x + rect.dimentions.x - (0.0625 * rect.dimentions.x) - width/2;
 			break;
 		case PaddleType::LEFT:
 		default:
-			position.x = rect.origin.x + 0.0625 * (rect.dimentions.x);
+			position.x = rect.origin.x + (0.0625 * rect.dimentions.x) + width/2;
 		}
-		position.y = rect.origin.y + rect.dimentions.y / 2 - height / 2;
+		position.y = rect.origin.y + rect.dimentions.y / 2;
 	}
 
-	void keepInsidePlayableArea(const PlayableRectangle& rect) {
-		// Check yAxis only
-		if (position.y < rect.origin.y) {
-			position.y = rect.origin.y;
-			//speedY *= -1; // Leaving this creates a funny behavior, try it out. It's not a bug it's a feature
+	void keepInsidePlayableArea(const PlayableRectangle& rect) override {
+		// Check y axis only, paddle can't mode in x axis
+		// Top edge
+		if (position.y - height/2 < rect.origin.y) {
+			position.y = rect.origin.y + height/2;
+			//speed.y *= -1; // Leaving this creates a funny behavior, try it out. It's not a bug it's a feature
 		}
-		if (position.y > rect.origin.y + rect.dimentions.y - height) {
-			position.y = rect.origin.y + rect.dimentions.y - height;
-			//speedY *= - 1; // Leaving this creates a funny behavior, try it out. It's not a bug it's a feature
+		// Bottom edge
+		if (position.y + height/2 > rect.origin.y + rect.dimentions.y) {
+			position.y = rect.origin.y + rect.dimentions.y - height/2;
+			//speed.y *= - 1; // Leaving this creates a funny behavior, try it out. It's not a bug it's a feature
 		}
 	}
 
-	void updatePosition(float deltaTime) {
-		position.y += speedY * deltaTime;
+	void updatePosition(float deltaTime) override {
+		position.y += speed.y * deltaTime;
 	}
 };
 
-struct Ball {
-	double radius;
-
-	rl::Vector2 position;
-	rl::Vector2 speed;
-
+struct Ball : GameObject {
+	float radius;
 
 	Ball(int radiusInPixels, float speedX = 0.0, float speedY = 0.0)
-		: radius{ static_cast<float>(radiusInPixels) } {
-		position = { 0.0, 0.0 };
-		speed = { speedX, speedY };
-	}
+		: radius{ static_cast<float>(radiusInPixels) }, GameObject{ {0.0, 0.0}, {speedX, speedY} } {}
 
-	void positionMiddlePlayableArea(const PlayableRectangle& rect) {
+	void positionInPlayableArea(const PlayableRectangle& rect) override {
 		position.x = (rect.origin.x + rect.dimentions.x) / 2.0;
 		position.y = (rect.origin.y + rect.dimentions.y) / 2.0;
 	}
 
-	void keepInsidePlayableArea(const PlayableRectangle& rect) {
+	void keepInsidePlayableArea(const PlayableRectangle& rect) override {
 		// Check xAxis
 		if (position.x - radius < rect.origin.x) {
 			position.x = rect.origin.x + radius;
@@ -102,23 +106,15 @@ struct Ball {
 		}
 	}
 
-	bool checkCollisionWithPaddle(const Paddle& paddle) {
-		return rl::CheckCollisionCircleRec(rl::Vector2{ position.x, position.y }, radius,
-			rl::Rectangle{ paddle.position.x,
-						   paddle.position.y,
-						   paddle.width,
-						   paddle.height });
-	}
-
 	void handleCollisionWithPaddle(const Paddle& paddle) {
-		if (paddle.type == Paddle::LEFT) position.x = paddle.position.x + paddle.width + radius;
-		else position.x = paddle.position.x - radius;
+		if (paddle.type == Paddle::LEFT) position.x = paddle.position.x + paddle.width / 2 + radius;
+		else position.x = paddle.position.x - paddle.width / 2 - radius;
 
 		speed.x *= -1;
-		speed.y = 500 * (position.y - (paddle.position.y + paddle.height / 2)) / paddle.height / 2;
+		speed.y = 500 * (position.y - paddle.position.y) / paddle.height / 2;
 	}
 
-	void updatePosition(float deltaTime) {
+	void updatePosition(float deltaTime) override {
 		position.x += speed.x * deltaTime;
 		position.y += speed.y * deltaTime;
 
@@ -126,57 +122,126 @@ struct Ball {
 	}
 };
 
-int main() {
-	// Window set-up
-	const PlayableRectangle gameArea{ 0, 0, 800, 600 };
+struct PongGame {
+	const PlayableRectangle& gameArea;
+	Ball& ball;
+	Paddle& leftPaddle;
+	Paddle& rightPaddle;
 
-	rl::InitWindow(gameArea.dimentions.x, gameArea.dimentions.y, "Pong"); // First create an application window
-	rl::SetWindowState(rl::FLAG_VSYNC_HINT); // Turn V-sync on
+	PongGame(const PlayableRectangle& gameArea, Ball& ball, Paddle& leftPaddle, Paddle& rightPaddle)
+		: gameArea(gameArea), ball(ball), leftPaddle(leftPaddle), rightPaddle(rightPaddle) {}
 
-	// Initialize components
-	Ball ball{ 5, -500 };
-	Paddle leftPaddle{ 10, 100, Paddle::LEFT, 500 };
-	Paddle rightPaddle{ 10, 100, Paddle::RIGHT, 500 };
+	virtual void initialize() = 0;
+	virtual void update() = 0;
+	virtual void render() = 0;
+	virtual bool end() = 0;
+	virtual void close() = 0;
 
-	ball.positionMiddlePlayableArea(gameArea);
-	leftPaddle.positionSidePlayableArea(gameArea);
-	rightPaddle.positionSidePlayableArea(gameArea);
+private:
+	virtual void manageCollitions() = 0;
+	virtual void constrainGameObjectsToGameArea() = 0;
+};
 
-	const char* winnerText = nullptr;
+struct PongGameDesktop : PongGame{
+	PongGameDesktop(const PlayableRectangle& gameArea, Ball& ball, Paddle& leftPaddle, Paddle& rightPaddle)
+		: PongGame{gameArea, ball, leftPaddle, rightPaddle} {}
 
-	while (!rl::WindowShouldClose()) {
+	void initialize() override {
+		rl::InitWindow(gameArea.dimentions.x, gameArea.dimentions.y, "Pong"); // First create an application window
+		rl::SetWindowState(rl::FLAG_VSYNC_HINT); // Turn V-sync on
+
+		ball.positionInPlayableArea(gameArea);
+		leftPaddle.positionInPlayableArea(gameArea);
+		rightPaddle.positionInPlayableArea(gameArea);
+	}
+
+	void update() override {
 		// Update paddle speeds
-		if (rl::IsKeyDown(rl::KEY_W)) leftPaddle.speedY = (leftPaddle.speedY > 0) ? -leftPaddle.speedY : leftPaddle.speedY;
-		if (rl::IsKeyDown(rl::KEY_S)) leftPaddle.speedY = (leftPaddle.speedY > 0) ? leftPaddle.speedY : -leftPaddle.speedY;
-		if (rl::IsKeyDown(rl::KEY_UP)) rightPaddle.speedY = (rightPaddle.speedY > 0) ? -rightPaddle.speedY : rightPaddle.speedY;
-		if (rl::IsKeyDown(rl::KEY_DOWN)) rightPaddle.speedY = (rightPaddle.speedY > 0) ? rightPaddle.speedY : -rightPaddle.speedY;
+		if (rl::IsKeyDown(rl::KEY_W)) leftPaddle.speed.y = (leftPaddle.speed.y > 0) ? -leftPaddle.speed.y : leftPaddle.speed.y;
+		if (rl::IsKeyDown(rl::KEY_S)) leftPaddle.speed.y = (leftPaddle.speed.y > 0) ? leftPaddle.speed.y : -leftPaddle.speed.y;
+		if (rl::IsKeyDown(rl::KEY_UP)) rightPaddle.speed.y = (rightPaddle.speed.y > 0) ? -rightPaddle.speed.y : rightPaddle.speed.y;
+		if (rl::IsKeyDown(rl::KEY_DOWN)) rightPaddle.speed.y = (rightPaddle.speed.y > 0) ? rightPaddle.speed.y : -rightPaddle.speed.y;
 
 		// Update positions
 		ball.updatePosition(rl::GetFrameTime());
 		if (rl::IsKeyDown(rl::KEY_W) || rl::IsKeyDown(rl::KEY_S)) leftPaddle.updatePosition(rl::GetFrameTime());
 		if (rl::IsKeyDown(rl::KEY_UP) || rl::IsKeyDown(rl::KEY_DOWN)) rightPaddle.updatePosition(rl::GetFrameTime());
 
-		// Handle ball-paddle collisions if any
-		if (ball.checkCollisionWithPaddle(leftPaddle)) ball.handleCollisionWithPaddle(leftPaddle);
-		if (ball.checkCollisionWithPaddle(rightPaddle)) ball.handleCollisionWithPaddle(rightPaddle);
+		manageCollitions(); // ball-paddle collitions
 
-		// Constraint game objects to playable area
-		ball.keepInsidePlayableArea(gameArea);
-		leftPaddle.keepInsidePlayableArea(gameArea);
-		rightPaddle.keepInsidePlayableArea(gameArea);
+		constrainGameObjectsToGameArea();
+	}
 
+	void render() override {
 		// Draw on screen
 		rl::BeginDrawing();
-
 			rl::ClearBackground(rl::RAYWHITE);
 			rl::DrawCircle(ball.position.x, ball.position.y, ball.radius, rl::BLACK);
-			rl::DrawRectangle((int)leftPaddle.position.x, (int)leftPaddle.position.y, (int)leftPaddle.width, (int)leftPaddle.height, rl::BLACK);
-			rl::DrawRectangle((int)rightPaddle.position.x, (int)rightPaddle.position.y, (int)rightPaddle.width, (int)rightPaddle.height, rl::BLACK);
-			rl::DrawFPS(10, 10);
-
+			rl::DrawRectangle((int)(leftPaddle.position.x - leftPaddle.width / 2), (int)(leftPaddle.position.y - leftPaddle.height / 2), (int)leftPaddle.width, (int)leftPaddle.height, rl::BLACK);
+			rl::DrawRectangle((int)(rightPaddle.position.x - rightPaddle.width / 2), (int)(rightPaddle.position.y - rightPaddle.height / 2), (int)rightPaddle.width, (int)rightPaddle.height, rl::BLACK);
+			rl::DrawFPS(5, 5);
 		rl::EndDrawing();
 	}
 
-	rl::CloseWindow(); // It is a C library, so memory has to be released
+	bool end() override {
+		return rl::WindowShouldClose();
+	}
+
+	void close() override {
+		rl::CloseWindow(); // It is a C library, so memory has to be released
+	}
+
+private:
+	void manageCollitions() override {
+		if (checkBallCollisionWithPaddle(Paddle::LEFT)) handleBallCollisionWithPaddle(Paddle::LEFT);
+		if (checkBallCollisionWithPaddle(Paddle::RIGHT)) handleBallCollisionWithPaddle(Paddle::RIGHT);
+	}
+
+	bool checkBallCollisionWithPaddle(Paddle::PaddleType paddleType) {
+		Paddle& paddle = (paddleType == Paddle::LEFT) ? leftPaddle : rightPaddle;
+
+		return rl::CheckCollisionCircleRec(rl::Vector2{ ball.position.x, ball. position.y }, ball.radius,
+			rl::Rectangle{ paddle.position.x - paddle.width / 2,
+						   paddle.position.y - paddle.height / 2,
+						   paddle.width,
+						   paddle.height });
+	}
+
+	void handleBallCollisionWithPaddle(Paddle::PaddleType type) {
+		Paddle& paddle = (type == Paddle::LEFT) ? leftPaddle : rightPaddle;
+		float xOffset = (type == Paddle::LEFT) ? paddle.width / 2 + ball.radius : -paddle.width / 2 - ball.radius;
+
+		ball.position.x = paddle.position.x + xOffset;
+		ball.speed.x *= -1;
+		ball.speed.y = 500 * (ball.position.y - paddle.position.y) / paddle.height / 2;
+	}
+
+	void constrainGameObjectsToGameArea() override {
+		ball.keepInsidePlayableArea(gameArea);
+		leftPaddle.keepInsidePlayableArea(gameArea);
+		rightPaddle.keepInsidePlayableArea(gameArea);
+	}
+};
+
+int main() {
+	// Window set-up
+	const PlayableRectangle gameArea{ 0, 0, 800, 600 };
+
+	// Initialize components
+	Ball ball{ 5, -500 };
+	Paddle leftPaddle{ 10, 100, Paddle::LEFT, 500 };
+	Paddle rightPaddle{ 10, 100, Paddle::RIGHT, 500 };
+
+	PongGameDesktop game{gameArea, ball, leftPaddle, rightPaddle};
+
+	game.initialize();
+
+	while (!game.end()) {
+		game.update();
+
+		game.render();
+	}
+
+	game.close();
 	return 0;
 }
